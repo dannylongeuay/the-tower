@@ -12,6 +12,7 @@ const FLOOR_SPRITE_INDEX: usize = 97;
 fn main() {
     App::new()
         .insert_resource(ImageSettings::default_nearest())
+        .insert_resource(ClearColor(Color::rgb(0., 0., 0.)))
         .insert_resource(WindowDescriptor {
             title: "The Tower".to_string(),
             width: 1280.,
@@ -27,6 +28,8 @@ fn main() {
         .add_startup_system_to_stage(StartupStage::PostStartup, spawn_tower_system)
         .add_system(input_system)
         .add_system(update_position_system)
+        .add_system(update_visiblity_system)
+        .add_system(update_explorable_system)
         .run();
 }
 
@@ -39,10 +42,20 @@ struct Position {
     y: i32,
 }
 
+impl Position {
+    fn distance2(&self, other: &Self) -> f32 {
+        ((self.x - other.x) * (self.x - other.x) + (self.y - other.y) * (self.y - other.y)) as f32
+    }
+    fn distance(&self, other: &Self) -> f32 {
+        self.distance2(other).sqrt()
+    }
+}
+
+#[derive(Component)]
+struct Explorable;
+
 struct Tile {
     pos: Position,
-    explored: bool,
-    visible: bool,
     entities: Vec<Entity>,
 }
 
@@ -118,13 +131,13 @@ fn spawn_tower_system(mut commands: Commands, texture_handles: Res<TextureHandle
                     scale: SPRITE_SCALE,
                     ..default()
                 },
+                visibility: Visibility { is_visible: false },
                 ..default()
             });
             ec.insert(pos);
+            ec.insert(Explorable);
             let tile = Tile {
                 pos,
-                explored: false,
-                visible: false,
                 entities: vec![ec.id()],
             };
             tiles.insert(pos, tile);
@@ -144,6 +157,38 @@ fn spawn_tower_system(mut commands: Commands, texture_handles: Res<TextureHandle
     levels.insert(level.name, level);
     let tower = Tower { levels };
     commands.insert_resource(tower);
+}
+
+fn update_visiblity_system(
+    player_query: Query<&Position, With<Player>>,
+    mut ent_query: Query<(&mut Visibility, &Position), (Without<Player>, Without<Explorable>)>,
+) {
+    let player_pos = player_query
+        .get_single()
+        .expect("Error: could not find player");
+    for (mut vis, pos) in ent_query.iter_mut() {
+        match player_pos.distance(pos) < 5. {
+            true => vis.is_visible = true,
+            false => vis.is_visible = false,
+        };
+    }
+}
+
+fn update_explorable_system(
+    player_query: Query<&Position, With<Player>>,
+    mut ent_query: Query<(&mut Visibility, &mut TextureAtlasSprite, &Position), With<Explorable>>,
+) {
+    let player_pos = player_query
+        .get_single()
+        .expect("Error: could not find player");
+    for (mut vis, mut sprite, pos) in ent_query.iter_mut() {
+        if player_pos.distance(pos) < 5. {
+            vis.is_visible = true;
+            sprite.color = Color::rgba(1., 1., 1., 1.);
+        } else {
+            sprite.color = Color::rgba(1., 1., 1., 0.25);
+        }
+    }
 }
 
 fn update_position_system(mut query: Query<(&mut Transform, &Position)>) {
