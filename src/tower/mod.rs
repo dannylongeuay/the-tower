@@ -21,14 +21,49 @@ impl Plugin for TowerPlugin {
 #[derive(Component)]
 pub struct Explorable;
 
-struct Tile {
+pub struct Tile {
     pos: Position,
+    pub walkable: bool,
     entities: Vec<Entity>,
 }
 
-struct Map {
+pub struct Map {
     name: &'static str,
-    tiles: HashMap<Position, Tile>,
+    pub tiles: HashMap<Position, Tile>,
+}
+
+impl Map {
+    pub fn from_str(name: &'static str, s: &str) -> Self {
+        let mut tiles: HashMap<Position, Tile> = HashMap::new();
+        let mut y = 0;
+        for row in s.lines().map(str::trim).rev() {
+            if !row.starts_with("|") {
+                continue;
+            }
+            let mut x = 0;
+            let splits: Vec<&str> = row.trim_start_matches("|").split_terminator("|").collect();
+            for split in splits {
+                let pos = Position { x, y };
+                let mut tile = Tile {
+                    pos,
+                    walkable: true,
+                    entities: Vec::new(),
+                };
+                let chars: Vec<char> = split.chars().collect();
+                match chars[0] {
+                    'W' => {
+                        tile.walkable = false;
+                    }
+                    _ => {}
+                }
+                tiles.insert(pos, tile);
+                x += 1;
+            }
+            y += 1;
+        }
+
+        Map { name, tiles }
+    }
 }
 
 struct Level {
@@ -81,6 +116,7 @@ fn spawn_tower_system(mut commands: Commands, texture_handles: Res<TextureHandle
             ec.insert(Explorable);
             let tile = Tile {
                 pos,
+                walkable: true,
                 entities: vec![ec.id()],
             };
             tiles.insert(pos, tile);
@@ -100,4 +136,26 @@ fn spawn_tower_system(mut commands: Commands, texture_handles: Res<TextureHandle
     levels.insert(level.name, level);
     let tower = Tower { levels };
     commands.insert_resource(tower);
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_map_from_str() {
+        let map = Map::from_str(
+            "test_map",
+            "
+        | | | | | |
+        | | | | | |
+        | |W| | | |
+        | | | |W| |
+        | | | | | |
+            ",
+        );
+        assert!(!map.tiles.get(&Position { x: 1, y: 2 }).unwrap().walkable);
+        assert!(map.tiles.get(&Position { x: 2, y: 2 }).unwrap().walkable);
+        assert!(!map.tiles.get(&Position { x: 3, y: 1 }).unwrap().walkable);
+    }
 }

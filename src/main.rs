@@ -15,6 +15,7 @@ mod player;
 mod position;
 mod settings;
 mod tower;
+mod utils;
 
 fn main() {
     App::new()
