@@ -57,14 +57,19 @@ impl Iterator for Raycast {
 pub mod tests {
     use std::collections::HashSet;
 
-    use crate::tower::Map;
-
     use super::*;
+    use crate::tower::tower::Tower;
 
     #[test]
     fn test_raycast() {
-        let map = Map::from_str(
-            "test_map",
+        let level_name = "test_level";
+        let map_name = "test_map";
+        let mut tower = Tower::new();
+        tower.insert_map_from_str(
+            level_name,
+            map_name,
+            5,
+            5,
             "
         | | | | | |
         | | | | | |
@@ -98,7 +103,7 @@ pub mod tests {
             let mut visible: HashSet<Position> = HashSet::new();
             for pos in rc {
                 visible.insert(pos);
-                if !map.tiles.get(&pos).unwrap().walkable {
+                if !tower.get_tile(level_name, map_name, &pos).unwrap().opaque {
                     break;
                 }
             }
