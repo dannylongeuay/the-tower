@@ -1,4 +1,4 @@
-use std::ops::{Mul, Sub};
+use std::ops::{Add, Mul, Sub};
 
 use bevy::prelude::*;
 
@@ -11,6 +11,12 @@ impl Plugin for PositionPlugin {
         app.add_system(update_position_system);
     }
 }
+const DIRECTIONS: &'static [Position] = &[
+    Position::UP,
+    Position::DOWN,
+    Position::LEFT,
+    Position::RIGHT,
+];
 
 #[derive(Debug, Component, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct Position {
@@ -20,6 +26,10 @@ pub struct Position {
 
 impl Position {
     pub const ZERO: Self = Self { x: 0, y: 0 };
+    pub const UP: Self = Self { x: 0, y: 1 };
+    pub const DOWN: Self = Self { x: 0, y: -1 };
+    pub const LEFT: Self = Self { x: -1, y: 0 };
+    pub const RIGHT: Self = Self { x: 1, y: 0 };
     pub fn new(x: i32, y: i32) -> Self {
         Position { x, y }
     }
@@ -33,6 +43,43 @@ impl Position {
         Position {
             x: self.x.abs(),
             y: self.y.abs(),
+        }
+    }
+    pub fn neighbors(&self) -> impl Iterator<Item = Self> {
+        Neighbors::new(*self)
+    }
+}
+
+struct Neighbors {
+    origin: Position,
+    index: usize,
+}
+
+impl Neighbors {
+    fn new(origin: Position) -> Self {
+        Neighbors { origin, index: 0 }
+    }
+}
+
+impl Iterator for Neighbors {
+    type Item = Position;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= DIRECTIONS.len() {
+            return None;
+        }
+        let neighbor = *DIRECTIONS.get(self.index).unwrap() + self.origin;
+        self.index += 1;
+        Some(neighbor)
+    }
+}
+
+impl Add for Position {
+    type Output = Position;
+
+    fn add(self, other: Self) -> Self {
+        Position {
+            x: self.x + other.x,
+            y: self.y + other.y,
         }
     }
 }

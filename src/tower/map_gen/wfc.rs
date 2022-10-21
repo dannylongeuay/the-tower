@@ -103,6 +103,7 @@ struct WFC {
     constraints: Vec<usize>,
     distributions: Vec<usize>,
     entropy_heap: BinaryHeap<EntropyPosition>,
+    propagated: Vec<Position>,
 }
 
 impl WFC {
@@ -132,6 +133,7 @@ impl WFC {
             constraints,
             distributions,
             entropy_heap,
+            propagated: Vec::new(),
         }
     }
     fn choose(&mut self) -> Position {
@@ -153,13 +155,22 @@ impl WFC {
                     continue;
                 }
                 *status = false;
+                self.propagated.push(*pos);
             }
         } else {
             panic!("cannot collapse cell at {:?}", pos);
         }
     }
     fn propagate(&mut self) {
-        todo!()
+        while let Some(pos) = self.propagated.pop() {
+            for neighbor in self.cells.valid_neighbors(&pos) {
+                let cell = self.cells.get(&neighbor).unwrap();
+                if cell.collapsed {
+                    continue;
+                }
+                let dir = pos - neighbor;
+            }
+        }
     }
 }
 
