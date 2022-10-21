@@ -5,17 +5,7 @@ use std::{
 
 use rand::seq::SliceRandom;
 
-use crate::position::Position;
-
-struct Contraints;
-
-struct Frequencies;
-
-impl Frequencies {
-    fn relative_frequency(&self, index: usize) -> f32 {
-        1.
-    }
-}
+use crate::{position::Position, tower::grid::Grid};
 
 #[derive(PartialEq)]
 struct EntropyPosition {
@@ -37,57 +27,70 @@ impl PartialOrd for EntropyPosition {
     }
 }
 
+#[derive(Debug)]
 struct Cell {
-    pos: Position,
     possible: Vec<bool>,
-    total_weight: f32,
-    total_weight_log_weight: f32,
-    entropy_noise: f32,
+    // total_weight: f32,
+    // total_weight_log_weight: f32,
+    // entropy_noise: f32,
     collapsed: bool,
 }
 
+impl Default for Cell {
+    fn default() -> Self {
+        Cell {
+            possible: Vec::new(),
+            // total_weight: 0.,
+            // total_weight_log_weight: 0.,
+            // entropy_noise: 0.,
+            collapsed: false,
+        }
+    }
+}
+
 impl Cell {
-    fn total_frequencies(&self, f: &Frequencies) -> f32 {
+    fn total_distribution(&self, d: &Vec<usize>) -> f32 {
         let mut total = 0.;
         for (index, &possible) in self.possible.iter().enumerate() {
             if possible {
-                total += f.relative_frequency(index);
+                total += *d.get(index).unwrap() as f32;
             }
         }
         return total;
     }
-    fn entropy(&self, f: &Frequencies) -> f32 {
+    fn entropy(&self, d: &Vec<usize>) -> f32 {
         // move this to initialization
-        {
-            let total_weight = self.total_frequencies(f) as f32;
-            let total_weight_log_weight: f32 = self
-                .possible
-                .iter()
-                .enumerate()
-                .map(|(index, &possible)| {
-                    if possible {
-                        let rf = f.relative_frequency(index) as f32;
-                        return rf * rf.log2();
-                    } else {
-                        return 0.;
-                    }
-                })
-                .sum();
-            return total_weight.log2() - (total_weight_log_weight / total_weight);
-        }
+        let total_weight = self.total_distribution(d);
+        let total_weight_log_weight: f32 = self
+            .possible
+            .iter()
+            .enumerate()
+            .map(|(index, &possible)| {
+                if possible {
+                    let rf = *d.get(index).unwrap() as f32;
+                    return rf * rf.log2();
+                } else {
+                    return 0.;
+                }
+            })
+            .sum();
+        total_weight.log2() - (total_weight_log_weight / total_weight)
         // self.total_weight.log2() - (self.log_weight / self.total_weight)
     }
-    fn remove_tile(&mut self, index: usize, f: &Frequencies) {
-        self.possible[index] = false;
-        let rf = f.relative_frequency(index);
-        self.total_weight -= rf;
-        self.total_weight_log_weight -= rf * rf.log2();
-    }
-    fn choose_possible(&self, f: &Frequencies) -> Option<usize> {
+    // fn remove_tile(&mut self, index: usize, d: &Vec<usize>) {
+    //     self.possible[index] = false;
+    //     let rf = *d.get(index).unwrap() as f32;
+    //     self.total_weight -= rf;
+    //     self.total_weight_log_weight -= rf * rf.log2();
+    // }
+    fn choose_possible(&self, d: &Vec<usize>) -> Option<usize> {
         let mut choices: Vec<usize> = Vec::new();
         for (index, &status) in self.possible.iter().enumerate() {
             if status {
-                choices.push(index);
+                let dist = *d.get(index).unwrap();
+                for _ in 0..dist {
+                    choices.push(index);
+                }
             }
         }
         choices.choose(&mut rand::thread_rng()).copied()
@@ -95,14 +98,42 @@ impl Cell {
 }
 
 struct WFC {
-    cells: HashMap<Position, Cell>,
+    cells: Grid<Cell>,
     uncollapsed_cells: usize,
-    contraints: Contraints,
-    frequencies: Frequencies,
+    constraints: Vec<usize>,
+    distributions: Vec<usize>,
     entropy_heap: BinaryHeap<EntropyPosition>,
 }
 
 impl WFC {
+    fn new(
+        width: usize,
+        height: usize,
+        constraints: Vec<usize>,
+        distributions: Vec<usize>,
+    ) -> Self {
+        let mut entropy_heap: BinaryHeap<EntropyPosition> = BinaryHeap::new();
+        let mut cells: Grid<Cell> = Grid::new(width, height);
+        for y in 0..height {
+            for x in 0..width {
+                let pos = Position::new(x as i32, y as i32);
+                let cell = cells.get_mut(&pos).unwrap();
+                cell.possible.resize(distributions.len(), true);
+                entropy_heap.push(EntropyPosition {
+                    entropy: cell.entropy(&distributions),
+                    pos,
+                })
+            }
+        }
+        let uncollapsed_cells = cells.len();
+        WFC {
+            cells,
+            uncollapsed_cells,
+            constraints,
+            distributions,
+            entropy_heap,
+        }
+    }
     fn choose(&mut self) -> Position {
         while let Some(EntropyPosition { entropy: _, pos }) = self.entropy_heap.pop() {
             let cell = self.cells.get(&pos).unwrap();
@@ -114,7 +145,8 @@ impl WFC {
     }
     fn collapse(&mut self, pos: &Position) {
         let mut cell = self.cells.get_mut(pos).unwrap();
-        if let Some(chosen_index) = cell.choose_possible(&self.frequencies) {
+        println!("{cell:?}");
+        if let Some(chosen_index) = cell.choose_possible(&self.distributions) {
             cell.collapsed = true;
             for (index, status) in cell.possible.iter_mut().enumerate() {
                 if chosen_index == index {
@@ -142,5 +174,16 @@ impl Iterator for WFC {
         self.propagate();
         self.uncollapsed_cells -= 1;
         Some(())
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    fn test_basic_wfc_tiled() {
+        let mut wfc = WFC::new(10, 10, vec![0, 1, 2], vec![1, 1, 1]);
+        assert!(wfc.next().is_some());
     }
 }

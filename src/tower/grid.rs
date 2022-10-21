@@ -30,6 +30,18 @@ impl<T> Grid<T> {
         self.cells.get_mut(index)
     }
 
+    pub fn len(&self) -> usize {
+        self.cells.len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.cells.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.cells.iter_mut()
+    }
+
     fn index(&self, pos: &Position) -> usize {
         pos.y as usize * self.width + pos.x as usize
     }
