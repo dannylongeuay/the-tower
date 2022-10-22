@@ -1,8 +1,8 @@
 use crate::position::Position;
 
 pub struct Grid<T> {
-    width: usize,
-    height: usize,
+    pub width: usize,
+    pub height: usize,
     cells: Vec<T>,
 }
 

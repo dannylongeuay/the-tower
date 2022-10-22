@@ -3,7 +3,7 @@ use std::{
     collections::{BinaryHeap, HashMap},
 };
 
-use rand::seq::SliceRandom;
+use rand::{seq::SliceRandom, Rng};
 
 use crate::{
     position::{Position, DIRECTIONS},
@@ -35,7 +35,7 @@ struct Cell {
     possible: Vec<bool>,
     // total_weight: f32,
     // total_weight_log_weight: f32,
-    // entropy_noise: f32,
+    entropy_noise: f32,
     chosen_index: Option<usize>,
 }
 
@@ -45,7 +45,7 @@ impl Default for Cell {
             possible: Vec::new(),
             // total_weight: 0.,
             // total_weight_log_weight: 0.,
-            // entropy_noise: 0.,
+            entropy_noise: 0.,
             chosen_index: None,
         }
     }
@@ -62,7 +62,7 @@ impl Cell {
         return total;
     }
     fn entropy(&self, d: &Vec<usize>) -> f32 {
-        // move this to initialization
+        // TODO: optimize by caching
         let total_weight = self.total_distribution(d);
         let total_weight_log_weight: f32 = self
             .possible
@@ -77,7 +77,7 @@ impl Cell {
                 }
             })
             .sum();
-        total_weight.log2() - (total_weight_log_weight / total_weight)
+        total_weight.log2() - (total_weight_log_weight / total_weight) + self.entropy_noise
         // self.total_weight.log2() - (self.log_weight / self.total_weight)
     }
     // fn remove_tile(&mut self, index: usize, d: &Vec<usize>) {
@@ -117,11 +117,13 @@ impl WFC {
     ) -> Self {
         let mut entropy_heap: BinaryHeap<EntropyPosition> = BinaryHeap::new();
         let mut cells: Grid<Cell> = Grid::new(width, height);
+        let mut rng = rand::thread_rng();
         for y in 0..height {
             for x in 0..width {
                 let pos = Position::new(x as i32, y as i32);
                 let cell = cells.get_mut(&pos).unwrap();
                 cell.possible.resize(distributions.len(), true);
+                cell.entropy_noise = rng.gen_range(0.00001..0.0001);
                 entropy_heap.push(EntropyPosition {
                     entropy: cell.entropy(&distributions),
                     pos,
@@ -206,6 +208,27 @@ impl WFC {
     }
 }
 
+impl std::fmt::Display for WFC {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        for y in 0..self.cells.height {
+            for x in 0..self.cells.width {
+                let cell = self.cells.get(&Position::new(x as i32, y as i32)).unwrap();
+                let possible: Vec<usize> = cell
+                    .possible
+                    .iter()
+                    .enumerate()
+                    .filter(|(_i, &p)| p)
+                    .map(|(i, _p)| i)
+                    .collect();
+                let s = String::from_iter(possible.iter().map(|&i| i.to_string()));
+                write!(f, "{s:03} ")?;
+            }
+            write!(f, "\n")?;
+        }
+        Ok(())
+    }
+}
+
 impl Iterator for WFC {
     type Item = ();
     fn next(&mut self) -> Option<()> {
@@ -247,21 +270,8 @@ pub mod tests {
             ],
         ];
         let mut wfc = WFC::new(10, 10, constraints, vec![1, 1, 1]);
-        for _ in wfc.by_ref() {}
-        for y in 0..10 {
-            for x in 0..10 {
-                let cell = wfc.cells.get(&Position::new(x as i32, y as i32)).unwrap();
-                let possible: Vec<usize> = cell
-                    .possible
-                    .iter()
-                    .enumerate()
-                    .filter(|(_i, &p)| p)
-                    .map(|(i, _p)| i)
-                    .collect();
-                let s = String::from_iter(possible.iter().map(|&i| i.to_string()));
-                print!("{s:03} ");
-            }
-            print!("\n");
+        while wfc.next().is_some() {
+            println!("{}", wfc);
         }
         assert!(wfc.next().is_none());
     }
