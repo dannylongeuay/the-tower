@@ -11,7 +11,7 @@ impl Plugin for PositionPlugin {
         app.add_system(update_position_system);
     }
 }
-const DIRECTIONS: &'static [Position] = &[
+pub const DIRECTIONS: &'static [Position] = &[
     Position::UP,
     Position::DOWN,
     Position::LEFT,

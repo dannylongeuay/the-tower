@@ -42,17 +42,11 @@ impl<T> Grid<T> {
         self.cells.iter_mut()
     }
 
-    pub fn valid_neighbors(&self, pos: &Position) -> impl Iterator<Item = Position> {
-        let width = self.width;
-        let height = self.height;
-        pos.neighbors().filter(move |p| in_bounds(p, width, height))
+    pub fn in_bounds(&self, pos: &Position) -> bool {
+        pos.x >= 0 && pos.x < self.width as i32 && pos.y >= 0 && pos.y < self.height as i32
     }
 
     fn index(&self, pos: &Position) -> usize {
         pos.y as usize * self.width + pos.x as usize
     }
-}
-
-fn in_bounds(pos: &Position, width: usize, height: usize) -> bool {
-    pos.x >= 0 && pos.x < width as i32 && pos.y >= 0 && pos.y < height as i32
 }

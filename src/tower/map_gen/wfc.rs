@@ -5,7 +5,10 @@ use std::{
 
 use rand::seq::SliceRandom;
 
-use crate::{position::Position, tower::grid::Grid};
+use crate::{
+    position::{Position, DIRECTIONS},
+    tower::grid::Grid,
+};
 
 #[derive(PartialEq)]
 struct EntropyPosition {
@@ -33,7 +36,7 @@ struct Cell {
     // total_weight: f32,
     // total_weight_log_weight: f32,
     // entropy_noise: f32,
-    collapsed: bool,
+    chosen_index: Option<usize>,
 }
 
 impl Default for Cell {
@@ -43,7 +46,7 @@ impl Default for Cell {
             // total_weight: 0.,
             // total_weight_log_weight: 0.,
             // entropy_noise: 0.,
-            collapsed: false,
+            chosen_index: None,
         }
     }
 }
@@ -100,17 +103,16 @@ impl Cell {
 struct WFC {
     cells: Grid<Cell>,
     uncollapsed_cells: usize,
-    constraints: Vec<usize>,
+    constraints: Vec<Vec<(Position, Vec<usize>)>>,
     distributions: Vec<usize>,
     entropy_heap: BinaryHeap<EntropyPosition>,
-    propagated: Vec<Position>,
 }
 
 impl WFC {
     fn new(
         width: usize,
         height: usize,
-        constraints: Vec<usize>,
+        constraints: Vec<Vec<(Position, Vec<usize>)>>,
         distributions: Vec<usize>,
     ) -> Self {
         let mut entropy_heap: BinaryHeap<EntropyPosition> = BinaryHeap::new();
@@ -133,13 +135,12 @@ impl WFC {
             constraints,
             distributions,
             entropy_heap,
-            propagated: Vec::new(),
         }
     }
     fn choose(&mut self) -> Position {
         while let Some(EntropyPosition { entropy: _, pos }) = self.entropy_heap.pop() {
             let cell = self.cells.get(&pos).unwrap();
-            if !cell.collapsed {
+            if cell.chosen_index.is_none() {
                 return pos;
             }
         }
@@ -147,29 +148,60 @@ impl WFC {
     }
     fn collapse(&mut self, pos: &Position) {
         let mut cell = self.cells.get_mut(pos).unwrap();
-        println!("{cell:?}");
         if let Some(chosen_index) = cell.choose_possible(&self.distributions) {
-            cell.collapsed = true;
+            cell.chosen_index = Some(chosen_index);
             for (index, status) in cell.possible.iter_mut().enumerate() {
                 if chosen_index == index {
                     continue;
                 }
                 *status = false;
-                self.propagated.push(*pos);
             }
         } else {
             panic!("cannot collapse cell at {:?}", pos);
         }
     }
-    fn propagate(&mut self) {
-        while let Some(pos) = self.propagated.pop() {
-            for neighbor in self.cells.valid_neighbors(&pos) {
-                let cell = self.cells.get(&neighbor).unwrap();
-                if cell.collapsed {
+    fn propagate(&mut self, pos: Position) {
+        let mut stack = vec![pos];
+        // let mut count = 0;
+        while let Some(pos) = stack.pop() {
+            // println!("{pos:?}");
+            for dir in DIRECTIONS {
+                let current_cel = self.cells.get(&pos).unwrap();
+                let neighbor = pos + *dir;
+                if !self.cells.in_bounds(&neighbor) {
                     continue;
                 }
-                let dir = pos - neighbor;
+                let mut possible_neighbors: Vec<usize> = Vec::new();
+                for (i, p) in current_cel.possible.iter().enumerate() {
+                    if !p {
+                        continue;
+                    }
+                    let constraint = self.constraints.get(i).unwrap();
+                    for (c_dir, allowed_sockets) in constraint {
+                        if *c_dir != *dir {
+                            continue;
+                        }
+                        possible_neighbors.extend(allowed_sockets);
+                    }
+                }
+                let neighbor_cell = self.cells.get_mut(&neighbor).unwrap();
+                if neighbor_cell.chosen_index.is_some() {
+                    continue;
+                }
+                for (socket, allowed) in neighbor_cell.possible.iter_mut().enumerate() {
+                    if !possible_neighbors.contains(&socket) {
+                        *allowed = false;
+                        if !stack.contains(&neighbor) {
+                            stack.push(neighbor);
+                        }
+                    }
+                }
+                // println!("{neighbor:?} {neighbor_cell:?}");
             }
+            // count += 1;
+            // if count > 5 {
+            //     break;
+            // }
         }
     }
 }
@@ -182,7 +214,7 @@ impl Iterator for WFC {
         }
         let next_pos = self.choose();
         self.collapse(&next_pos);
-        self.propagate();
+        self.propagate(next_pos);
         self.uncollapsed_cells -= 1;
         Some(())
     }
@@ -194,7 +226,43 @@ pub mod tests {
 
     #[test]
     fn test_basic_wfc_tiled() {
-        let mut wfc = WFC::new(10, 10, vec![0, 1, 2], vec![1, 1, 1]);
-        assert!(wfc.next().is_some());
+        let constraints: Vec<Vec<(Position, Vec<usize>)>> = vec![
+            vec![
+                (Position::UP, vec![0, 1]),
+                (Position::DOWN, vec![0, 1]),
+                (Position::LEFT, vec![0, 1]),
+                (Position::RIGHT, vec![0, 1]),
+            ],
+            vec![
+                (Position::UP, vec![0, 1, 2]),
+                (Position::DOWN, vec![0, 1, 2]),
+                (Position::LEFT, vec![0, 1, 2]),
+                (Position::RIGHT, vec![0, 1, 2]),
+            ],
+            vec![
+                (Position::UP, vec![1, 2]),
+                (Position::DOWN, vec![1, 2]),
+                (Position::LEFT, vec![1, 2]),
+                (Position::RIGHT, vec![1, 2]),
+            ],
+        ];
+        let mut wfc = WFC::new(10, 10, constraints, vec![1, 1, 1]);
+        for _ in wfc.by_ref() {}
+        for y in 0..10 {
+            for x in 0..10 {
+                let cell = wfc.cells.get(&Position::new(x as i32, y as i32)).unwrap();
+                let possible: Vec<usize> = cell
+                    .possible
+                    .iter()
+                    .enumerate()
+                    .filter(|(_i, &p)| p)
+                    .map(|(i, _p)| i)
+                    .collect();
+                let s = String::from_iter(possible.iter().map(|&i| i.to_string()));
+                print!("{s:03} ");
+            }
+            print!("\n");
+        }
+        assert!(wfc.next().is_none());
     }
 }
