@@ -1,1 +1,1 @@
-mod wfc;
+pub mod wfc;
