@@ -10,7 +10,7 @@ pub struct Tower {
 
 impl Tower {
     pub fn new() -> Self {
-        let mut levels: HashMap<&str, Level> = HashMap::new();
+        let levels: HashMap<&str, Level> = HashMap::new();
         Tower { levels }
     }
     pub fn get_tile(&self, level: &str, map: &str, pos: &Position) -> Option<&Tile> {
@@ -28,6 +28,29 @@ impl Tower {
             }
         }
         None
+    }
+    pub fn insert_empty_map(
+        &mut self,
+        level_name: &'static str,
+        map_name: &'static str,
+        width: usize,
+        height: usize,
+    ) {
+        if let Some(level) = self.levels.get_mut(level_name) {
+            level
+                .maps
+                .insert(map_name, Map::new(map_name, width, height));
+        } else {
+            let mut maps: HashMap<&'static str, Map> = HashMap::new();
+            maps.insert(map_name, Map::new(map_name, width, height));
+            self.levels.insert(
+                level_name,
+                Level {
+                    name: level_name,
+                    maps,
+                },
+            );
+        }
     }
     pub fn insert_map_from_str(
         &mut self,
@@ -66,6 +89,10 @@ struct Map {
 }
 
 impl Map {
+    fn new(name: &'static str, width: usize, height: usize) -> Self {
+        let grid: Grid<Tile> = Grid::new(width, height);
+        Map { name, grid }
+    }
     fn from_str(name: &'static str, width: usize, height: usize, s: &str) -> Self {
         let mut grid: Grid<Tile> = Grid::new(width, height);
         let mut y = 0;

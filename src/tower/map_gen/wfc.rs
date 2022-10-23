@@ -26,25 +26,25 @@ impl Ord for EntropyPosition {
 
 impl PartialOrd for EntropyPosition {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+        other.entropy.partial_cmp(&self.entropy)
     }
 }
 
 #[derive(Debug)]
-struct Cell {
+pub struct Cell {
     possible: Vec<bool>,
-    // total_weight: f32,
-    // total_weight_log_weight: f32,
+    total_weight: f32,
+    total_weight_log_weight: f32,
     entropy_noise: f32,
-    chosen_index: Option<usize>,
+    pub chosen_index: Option<usize>,
 }
 
 impl Default for Cell {
     fn default() -> Self {
         Cell {
             possible: Vec::new(),
-            // total_weight: 0.,
-            // total_weight_log_weight: 0.,
+            total_weight: 0.,
+            total_weight_log_weight: 0.,
             entropy_noise: 0.,
             chosen_index: None,
         }
@@ -52,7 +52,7 @@ impl Default for Cell {
 }
 
 impl Cell {
-    fn total_distribution(&self, d: &Vec<usize>) -> f32 {
+    fn total_weight(&self, d: &Vec<usize>) -> f32 {
         let mut total = 0.;
         for (index, &possible) in self.possible.iter().enumerate() {
             if possible {
@@ -61,11 +61,8 @@ impl Cell {
         }
         return total;
     }
-    fn entropy(&self, d: &Vec<usize>) -> f32 {
-        // TODO: optimize by caching
-        let total_weight = self.total_distribution(d);
-        let total_weight_log_weight: f32 = self
-            .possible
+    fn total_weight_log_weight(&self, d: &Vec<usize>) -> f32 {
+        self.possible
             .iter()
             .enumerate()
             .map(|(index, &possible)| {
@@ -76,16 +73,36 @@ impl Cell {
                     return 0.;
                 }
             })
-            .sum();
-        total_weight.log2() - (total_weight_log_weight / total_weight) + self.entropy_noise
-        // self.total_weight.log2() - (self.log_weight / self.total_weight)
+            .sum()
     }
-    // fn remove_tile(&mut self, index: usize, d: &Vec<usize>) {
-    //     self.possible[index] = false;
-    //     let rf = *d.get(index).unwrap() as f32;
-    //     self.total_weight -= rf;
-    //     self.total_weight_log_weight -= rf * rf.log2();
-    // }
+    fn set_entropy(&mut self, d: &Vec<usize>, noise: f32) {
+        self.total_weight = self.total_weight(d);
+        self.total_weight_log_weight = self.total_weight_log_weight(d);
+        self.entropy_noise = noise;
+    }
+    fn entropy(&self) -> f32 {
+        self.total_weight.log2() - self.total_weight_log_weight / self.total_weight
+            + self.entropy_noise
+    }
+    fn remove_index(&mut self, index: usize, d: &Vec<usize>) {
+        self.possible[index] = false;
+        let rf = *d.get(index).unwrap() as f32;
+        self.total_weight -= rf;
+        self.total_weight_log_weight -= rf * rf.log2();
+    }
+    fn collapse(&mut self, chosen_index: usize, d: &Vec<usize>) {
+        self.chosen_index = Some(chosen_index);
+        let index_removals: Vec<usize> = self
+            .possible
+            .iter()
+            .enumerate()
+            .filter(|(i, &s)| *i != chosen_index && s)
+            .map(|(i, _)| i)
+            .collect();
+        for index in index_removals {
+            self.remove_index(index, d);
+        }
+    }
     fn choose_possible(&self, d: &Vec<usize>) -> Option<usize> {
         let mut choices: Vec<usize> = Vec::new();
         for (index, &status) in self.possible.iter().enumerate() {
@@ -100,16 +117,16 @@ impl Cell {
     }
 }
 
-struct WFC {
-    cells: Grid<Cell>,
-    uncollapsed_cells: usize,
+pub struct WFC {
+    pub cells: Grid<Cell>,
+    pub uncollapsed_cells: usize,
     constraints: Vec<Vec<(Position, Vec<usize>)>>,
     distributions: Vec<usize>,
     entropy_heap: BinaryHeap<EntropyPosition>,
 }
 
 impl WFC {
-    fn new(
+    pub fn new(
         width: usize,
         height: usize,
         constraints: Vec<Vec<(Position, Vec<usize>)>>,
@@ -123,9 +140,9 @@ impl WFC {
                 let pos = Position::new(x as i32, y as i32);
                 let cell = cells.get_mut(&pos).unwrap();
                 cell.possible.resize(distributions.len(), true);
-                cell.entropy_noise = rng.gen_range(0.00001..0.0001);
+                cell.set_entropy(&distributions, rng.gen_range(0.001..0.01));
                 entropy_heap.push(EntropyPosition {
-                    entropy: cell.entropy(&distributions),
+                    entropy: cell.entropy(),
                     pos,
                 })
             }
@@ -149,24 +166,16 @@ impl WFC {
         unreachable!("entropy heap is empty");
     }
     fn collapse(&mut self, pos: &Position) {
-        let mut cell = self.cells.get_mut(pos).unwrap();
+        let cell = self.cells.get_mut(pos).unwrap();
         if let Some(chosen_index) = cell.choose_possible(&self.distributions) {
-            cell.chosen_index = Some(chosen_index);
-            for (index, status) in cell.possible.iter_mut().enumerate() {
-                if chosen_index == index {
-                    continue;
-                }
-                *status = false;
-            }
+            cell.collapse(chosen_index, &self.distributions);
         } else {
             panic!("cannot collapse cell at {:?}", pos);
         }
     }
     fn propagate(&mut self, pos: Position) {
         let mut stack = vec![pos];
-        // let mut count = 0;
         while let Some(pos) = stack.pop() {
-            // println!("{pos:?}");
             for dir in DIRECTIONS {
                 let current_cel = self.cells.get(&pos).unwrap();
                 let neighbor = pos + *dir;
@@ -190,20 +199,27 @@ impl WFC {
                 if neighbor_cell.chosen_index.is_some() {
                     continue;
                 }
-                for (socket, allowed) in neighbor_cell.possible.iter_mut().enumerate() {
-                    if !possible_neighbors.contains(&socket) {
-                        *allowed = false;
+                let indexes: Vec<usize> = neighbor_cell
+                    .possible
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, &s)| s)
+                    .map(|(i, _)| i)
+                    .collect();
+
+                for index in indexes {
+                    if !possible_neighbors.contains(&index) {
+                        neighbor_cell.remove_index(index, &self.distributions);
+                        self.entropy_heap.push(EntropyPosition {
+                            entropy: neighbor_cell.entropy(),
+                            pos: neighbor,
+                        });
                         if !stack.contains(&neighbor) {
                             stack.push(neighbor);
                         }
                     }
                 }
-                // println!("{neighbor:?} {neighbor_cell:?}");
             }
-            // count += 1;
-            // if count > 5 {
-            //     break;
-            // }
         }
     }
 }
@@ -269,7 +285,7 @@ pub mod tests {
                 (Position::RIGHT, vec![1, 2]),
             ],
         ];
-        let mut wfc = WFC::new(10, 10, constraints, vec![1, 1, 1]);
+        let mut wfc = WFC::new(5, 5, constraints, vec![1, 1, 1]);
         while wfc.next().is_some() {
             println!("{}", wfc);
         }
