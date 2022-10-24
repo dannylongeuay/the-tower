@@ -6,8 +6,8 @@ pub const DEFAULT_WINDOW_WIDTH: f32 = 1280.;
 pub const DEFAULT_WINDOW_HEIGHT: f32 = 720.;
 
 // Camera
-// pub const CAMERA_SCALE: f32 = 0.25;
-pub const CAMERA_SCALE: f32 = 0.5;
+pub const CAMERA_SCALE: f32 = 0.25;
+// pub const CAMERA_SCALE: f32 = 0.5;
 
 // Tower
 pub const TILE_WIDTH: i32 = 8;

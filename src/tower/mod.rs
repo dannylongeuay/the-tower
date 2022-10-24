@@ -51,7 +51,7 @@ fn spawn_player_system(mut commands: Commands, texture_handles: Res<TextureHandl
             },
             ..default()
         })
-        .insert(Position::ZERO)
+        .insert(Position::new(10, 10))
         .insert(Player);
 }
 
