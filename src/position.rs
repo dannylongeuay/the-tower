@@ -48,6 +48,18 @@ impl Position {
     pub fn neighbors(&self) -> impl Iterator<Item = Self> {
         Neighbors::new(*self)
     }
+    pub fn quadrant_transform(&self, dir: &Self, other: &Self) -> Self {
+        match *dir {
+            Position::UP => return Position::new(self.x + other.y, self.y + other.x),
+            Position::DOWN => return Position::new(self.x + other.y, self.y - other.x),
+            Position::LEFT => return Position::new(self.x - other.x, self.y + other.y),
+            Position::RIGHT => return Position::new(self.x + other.x, self.y + other.y),
+            _ => unreachable!("invalid direction"),
+        }
+    }
+    pub fn slope(&self) -> f32 {
+        (2. * self.y as f32 - 1.) / (2. * self.x as f32)
+    }
 }
 
 struct Neighbors {

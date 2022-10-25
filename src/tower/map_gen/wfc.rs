@@ -178,10 +178,6 @@ impl WFC {
         while let Some(pos) = stack.pop() {
             for dir in DIRECTIONS {
                 let current_cel = self.cells.get(&pos).unwrap();
-                let neighbor = pos + *dir;
-                if !self.cells.in_bounds(&neighbor) {
-                    continue;
-                }
                 let mut possible_neighbors: Vec<usize> = Vec::new();
                 for (i, p) in current_cel.possible.iter().enumerate() {
                     if !p {
@@ -195,7 +191,12 @@ impl WFC {
                         possible_neighbors.extend(allowed_sockets);
                     }
                 }
-                let neighbor_cell = self.cells.get_mut(&neighbor).unwrap();
+                let neighbor = pos + *dir;
+                let neighbor_cell_option = self.cells.get_mut(&neighbor);
+                if neighbor_cell_option.is_none() {
+                    continue;
+                }
+                let neighbor_cell = neighbor_cell_option.unwrap();
                 if neighbor_cell.chosen_index.is_some() {
                     continue;
                 }

@@ -103,7 +103,11 @@ pub mod tests {
             let mut visible: HashSet<Position> = HashSet::new();
             for pos in rc {
                 visible.insert(pos);
-                if !tower.get_tile(level_name, map_name, &pos).unwrap().opaque {
+                if !tower
+                    .get_tile(level_name, map_name, &pos)
+                    .unwrap()
+                    .transparent
+                {
                     break;
                 }
             }

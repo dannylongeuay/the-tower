@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     constants::{SPRITE_COLOR_EXPLORED_SHROUDED, SPRITE_COLOR_EXPLORED_VISIBLE},
     position::Position,
-    tower::Explorable,
+    tower::{tower::Tower, Explorable},
 };
 
 pub struct PlayerPlugin;
@@ -58,12 +58,12 @@ fn update_visiblity_system(
 fn update_explorable_system(
     player_query: Query<&Position, With<Player>>,
     mut ent_query: Query<(&mut Visibility, &mut TextureAtlasSprite, &Position), With<Explorable>>,
+    tower: Res<Tower>,
 ) {
-    let player_pos = player_query
-        .get_single()
-        .expect("Error: could not find player");
+    let player_pos = player_query.single();
+    let visible_pos = tower.get_visible("level1", "map1", &player_pos);
     for (mut vis, mut sprite, pos) in ent_query.iter_mut() {
-        if player_pos.distance(pos) < 5. {
+        if visible_pos.contains(pos) {
             vis.is_visible = true;
             sprite.color = SPRITE_COLOR_EXPLORED_VISIBLE;
         } else {

@@ -127,6 +127,7 @@ fn update_sprite_index_system(
     time: Res<Time>,
     mut timer: ResMut<WaveTimer>,
     mut query: Query<(&mut TextureAtlasSprite, &Position), With<Tile>>,
+    mut tower: ResMut<Tower>,
 ) {
     timer.timer.tick(time.delta());
     if !timer.timer.just_finished() {
@@ -140,7 +141,11 @@ fn update_sprite_index_system(
         let index = match wfc.cells.get(&pos).unwrap().chosen_index {
             Some(0) => DIRT_SPRITE_INDEX,
             Some(1) => GRASS_SPRITE_INDEX,
-            Some(2) => WATER_SPRITE_INDEX,
+            Some(2) => {
+                let mut tile = tower.get_tile_mut("level1", "map1", pos).unwrap();
+                tile.transparent = false;
+                WATER_SPRITE_INDEX
+            }
             _ => FLOOR_SPRITE_INDEX,
         };
         sprite.index = index;

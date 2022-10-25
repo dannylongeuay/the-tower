@@ -21,11 +21,17 @@ impl<T> Grid<T> {
     }
 
     pub fn get(&self, pos: &Position) -> Option<&T> {
+        if !self.in_bounds(pos) {
+            return None;
+        }
         let index = self.index(pos);
         self.cells.get(index)
     }
 
     pub fn get_mut(&mut self, pos: &Position) -> Option<&mut T> {
+        if !self.in_bounds(pos) {
+            return None;
+        }
         let index = self.index(pos);
         self.cells.get_mut(index)
     }
@@ -42,7 +48,7 @@ impl<T> Grid<T> {
         self.cells.iter_mut()
     }
 
-    pub fn in_bounds(&self, pos: &Position) -> bool {
+    fn in_bounds(&self, pos: &Position) -> bool {
         pos.x >= 0 && pos.x < self.width as i32 && pos.y >= 0 && pos.y < self.height as i32
     }
 
